@@ -31,7 +31,8 @@ extern "C" {
 #include "fonts.h"
 #include "st7735.h"
 #include "testimg.h"
-
+#include "menu.h"
+#include <stddef.h>
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 

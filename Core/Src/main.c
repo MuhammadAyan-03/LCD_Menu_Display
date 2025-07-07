@@ -1,52 +1,25 @@
-
+///* USER CODE BEGIN Header */
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
+  * @brief          : Main program body with scrolling menu
   ******************************************************************************
   */
 /* USER CODE END Header */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "st7735.h"
 #include "fonts.h"
 #include "stdio.h"
-#include "string.h"
+#include <stddef.h>
+#include "menu.h"
+#include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef hlpuart1;
 UART_HandleTypeDef hlpuart1;
 DMA_HandleTypeDef hdma_lpuart_rx;
 DMA_HandleTypeDef hdma_lpuart_tx;
@@ -54,24 +27,35 @@ DMA_HandleTypeDef hdma_lpuart_tx;
 SPI_HandleTypeDef hspi3;
 DMA_HandleTypeDef hdma_spi3_rx;
 DMA_HandleTypeDef hdma_spi3_tx;
-//SPI_HandleTypeDef hspi3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* USER CODE BEGIN PV */
 extern SPI_HandleTypeDef ST7735_SPI_PORT;
+
 uint8_t DMA_Buff[255] = {0};
 uint8_t main_Buff[255] = {0};
 int rx_done = 0;
 int tx_done = 0;
 int game_done = 0;
-uint8_t interpeter[255] = {0};
-uint8_t storage[255] = {0};
-int tx_complete = 0;
-int up = 0;
-int down = 1;
-int complete = 0;
-/* USER CODE END PV */
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+typedef enum {
+    MENU_MAIN,
+    MENU_SHAPES,
+    MENU_LIST,
+    MENU_SHAPE_RECT,
+    MENU_SHAPE_TRIANGLE,
+    MENU_EXIT
+} MenuState;
+
+static MenuState currentMenu = MENU_MAIN;
+static int mainMenuSelection = 0;
+static int shapesMenuSelection = 0;
+static int listMenuSelection = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -80,338 +64,612 @@ static void MX_DMA_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_SPI3_Init(void);
-volatile bool spi_dma_done = false;
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-{
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 1);
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-		memset(main_Buff, 0, strlen((char *)main_Buff));
-		memcpy(main_Buff, (char *)DMA_Buff, strlen((char *)DMA_Buff));
-		rx_done = 1;
+void drawMainMenu(void) {
+    ST7735_FillScreenFast(ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 10, mainMenuSelection == 0 ? "> Shapes" : "  Shapes", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 28, mainMenuSelection == 1 ? "> List" : "  List", Font_11x18, ST7735_WHITE, ST7735_BLACK);
 }
 
-void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
+void drawShapesMenu(void) {
+    ST7735_FillScreenFast(ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 10, shapesMenuSelection == 0 ? ">Rectangle" : " Rectangle", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 28, shapesMenuSelection == 1 ? ">Triangle" : " Triangle", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 46, shapesMenuSelection == 2 ? ">Back" : " Back", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+}
 
-    tx_done = true;
+void drawList(void) {
+    ST7735_FillScreenFast(ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 10, listMenuSelection == 0 ? "> Apple" : "  Apple", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 28, listMenuSelection == 1 ? "> Orange" : "  Orange", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 46, listMenuSelection == 2 ? "> Cherry" : "  Cherry", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 64, listMenuSelection == 3 ? "> Mango" : "  Mango", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteStringDMA(10, 82, listMenuSelection == 4 ? "> Back" : "  Back", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+}
+
+void drawRectangle(void) {
+    ST7735_FillScreenFast(ST7735_BLACK);
+    ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
+    ST7735_WriteStringDMA(10, 130, "Back (B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+}
+
+void drawTriangle(void) {
+    ST7735_FillScreenFast(ST7735_BLACK);
+    ST7735_DrawTriangle(0, 100, 64, 40, 128, 100, ST7735_GREEN);
+    ST7735_WriteStringDMA(10, 130, "Back (B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+}
+
+void menuLoop(void) {
+    uint8_t input[2] = {0};
+
+    while (1) {
+        switch (currentMenu) {
+            case MENU_MAIN:
+                drawMainMenu();
+                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+                if (input[0] == 'w' || input[0] == 'W')
+                    mainMenuSelection = (mainMenuSelection - 1 + 2) % 2;
+                else if (input[0] == 's' || input[0] == 'S')
+                    mainMenuSelection = (mainMenuSelection + 1) % 2;
+                else if (input[0] == 'e' || input[0] == 'E')
+                    currentMenu = (mainMenuSelection == 0) ? MENU_SHAPES : MENU_LIST;
+                break;
+
+            case MENU_SHAPES:
+                drawShapesMenu();
+                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+                if (input[0] == 'w' || input[0] == 'W')
+                    shapesMenuSelection = (shapesMenuSelection - 1 + 3) % 3;
+                else if (input[0] == 's' || input[0] == 'S')
+                    shapesMenuSelection = (shapesMenuSelection + 1) % 3;
+                else if (input[0] == 'e' || input[0] == 'E') {
+                    if (shapesMenuSelection == 0)
+                        currentMenu = MENU_SHAPE_RECT;
+                    else if (shapesMenuSelection == 1)
+                        currentMenu = MENU_SHAPE_TRIANGLE;
+                    else
+                        currentMenu = MENU_MAIN;
+                }
+                break;
+
+            case MENU_LIST:
+                drawList();
+                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+                if (input[0] == 'w' || input[0] == 'W')
+                    listMenuSelection = (listMenuSelection - 1 + 5) % 5;
+                else if (input[0] == 's' || input[0] == 'S')
+                    listMenuSelection = (listMenuSelection + 1) % 5;
+                else if (input[0] == 'e' || input[0] == 'E') {
+                    if (listMenuSelection == 4)
+                        currentMenu = MENU_MAIN;
+                    // Else, you could display the fruit if desired
+                }
+                break;
+
+            case MENU_SHAPE_RECT:
+                drawRectangle();
+                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+                if (input[0] == 'b' || input[0] == 'B')
+                    currentMenu = MENU_SHAPES;
+                break;
+
+            case MENU_SHAPE_TRIANGLE:
+                drawTriangle();
+                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+                if (input[0] == 'b' || input[0] == 'B')
+                    currentMenu = MENU_SHAPES;
+                break;
+
+            default:
+                currentMenu = MENU_MAIN;
+                break;
+        }
+    }
+}
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
+    memset(main_Buff, 0, sizeof(main_Buff));
+    memcpy(main_Buff, DMA_Buff, Size);
+    rx_done = 1;
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
+    tx_done = 1;
 }
 
 /* USER CODE END 0 */
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+int main(void) {
   HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_LPUART1_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   MX_SPI3_Init();
-  /* USER CODE BEGIN 2 */
+
   ST7735_Init();
-//  ST7735_WriteString(20, 40, "DMA Test", Font_16x26, ST7735_RED, ST7735_WHITE);
-  /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  while (1) {
+    menuLoop();
+  }
+}
 
-    /* USER CODE BEGIN 3 */
-	  ST7735_Backlight_On();
-	  real1:
-	  ST7735_FillScreenFast(ST7735_BLACK);
-
-	  /* Display "Test" */
-
-
-	  ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-	  ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-
-//	  HAL_Delay(5000);
-//	  HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, storage, sizeof(storage));
-	  HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-//	  while(rx_done != 1)
-//	  {
-//		  HAL_Delay(2000);
-//	  }
-//	  rx_done = 0;
-	  	  while(1)
-	  	  {
-	  		 if(strcmp((char*)storage,"e") == 0)
-			 {
-	  			  goto stop;
-			 }
-	  		 else if(strcmp((char*)storage,"s") == 0)
-	  		 {
-	  			 goto scroll2;
-	  		 }
-	  		 else
-	  		 {
-	  			 goto real1;
-	  		 }
-	  	  }
-
-	  	 if(strcmp((char *)storage, "e") == 0)
-	  	 {
-	  		 stop:
-		  	  goto real;
-		  	  memset(storage, 0, 255);
-	  	 }
-
-	  	if (strcmp((char *)storage, "s") == 0)
-	    {
-			scroll2:
-	        ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-	        ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-	        down = 0;
-	        up = 1;
-	        memset(storage, 0, 255);
-	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-	        if(strcmp((char *)storage, "e") == 0)
-	        {
-	        	ST7735_FillScreenFast(ST7735_BLACK);
-		        ST7735_WriteStringDMA(10, 10, "-> Apple", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-		        ST7735_WriteStringDMA(10, 28, "-> Orange", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-		        ST7735_WriteStringDMA(10, 46, "-> Cherry", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-		        ST7735_WriteStringDMA(10, 64, "-> Mango", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-				do{
-					memset(storage, 0, 255);
-					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-					if(strcmp((char *)storage, "b") == 0)
-					{
-						goto real1;
-					}
-				}while((char *)storage != "b");
-	        }
-	        else
-	        {
-	        	if(strcmp((char *)storage, "w") == 0)
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto scroll;
-	        	}
-	        	else if(strcmp((char *)storage, "s") == 0)
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto scroll1;
-	        	}
-	        	else
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto real1;
-	        	}
-	        }
-	        while(complete != 1);
-	    }
-
-	    if (strcmp((char *)storage, "w") == 0)
-	    {
-	    	scroll:
-	    	scroll1:
-	        ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-	        ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-	        memset(storage, 0, 255);
-	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-	        if(strcmp((char *)storage, "e") == 0)
-	        {
-	        	goto real;
-	        }
-	        else
-	        {
-	        	if(strcmp((char *)storage, "s") == 0)
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto scroll2;
-	        	}
-	        	else if(strcmp((char *)storage, "w") == 0)
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto scroll2;
-	        	}
-	        	else
-	        	{
-	        		memset(storage, 0, 255);
-	        		goto real1;
-	        	}
-	        }
-	        memset(storage, 0, 255);
-	        down = 1;
-	        up = 0;
-	        while(complete != 1);
-	    }
-	  while(complete != 1);
-     }
-
-  if(strcmp((char *)storage, "e") == 0)
-  	 {
-	  real:
-	  do{
-			memset(storage, 0, 255);
-			ST7735_FillScreenFast(ST7735_BLACK);
-			ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-			ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-			HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-
-			if(strcmp((char *)storage, "e") == 0)
-			{
-				ST7735_FillScreenFast(ST7735_BLACK);
-				ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
-				ST7735_DrawLine(0, 30, 127, 30, ST7735_GREEN);
-				ST7735_DrawLine(0, 130, 127, 130, ST7735_GREEN);
-				ST7735_DrawLine(0, 30, 0, 130, ST7735_GREEN);
-				ST7735_DrawLine(127, 30, 127, 130, ST7735_GREEN);
-				do{
-					memset(storage, 0, 255);
-					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-					if(strcmp((char *)storage, "b") == 0)
-					{
-						goto real;
-					}
-				}while((char *)storage != "b");
-			}
- 	  	    if (strcmp((char *)storage, "s") == 0)
- 	    	{
-
-				scroll3:
-				ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-				ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-				down = 0;
-				up = 1;
-				memset(storage, 0, 255);
-				HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-
-
-				if(strcmp((char *)storage, "e") == 0)
-				{
-					ST7735_FillScreenFast(ST7735_BLACK);
-					ST7735_DrawTriangle(0, 100, 64, 40, 128, 100, ST7735_GREEN);
-					do{
-						memset(storage, 0, 255);
-						HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-						if(strcmp((char *)storage, "b") == 0)
-						{
-							goto real;
-						}
-					}while((char *)storage != "b");
-				}
-				else if(strcmp((char *)storage, "b") == 0)
-				{
-					goto real1;
-				}
-			else
- 	        {
- 	        	if(strcmp((char *)storage, "w") == 0)
- 	        	{
- 	        		memset(storage, 0, 255);
- 	        		goto scroll4;
- 	        	}
- 	        	else if(strcmp((char *)storage, "s") == 0)
- 	        	{
- 	        		memset(storage, 0, 255);
- 	        		goto scroll5;
- 	        	}
-
- 	        }
- 	        while(complete != 1);
- 	    }
-
- 	    else if (strcmp((char *)storage, "w") == 0 )
- 	    {
- 	    	scroll4:
- 	    	scroll5:
-			ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
-			ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
- 	        memset(storage, 0, 255);
- 	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-			if(strcmp((char *)storage, "e") == 0)
-			{
-				ST7735_FillScreenFast(ST7735_BLACK);
-				ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
-				ST7735_DrawLine(0, 30, 127, 30, ST7735_GREEN);
-				ST7735_DrawLine(0, 130, 127, 130, ST7735_GREEN);
-				ST7735_DrawLine(0, 30, 0, 130, ST7735_GREEN);
-				ST7735_DrawLine(127, 30, 127, 130, ST7735_GREEN);
-				do{
-					memset(storage, 0, 255);
-					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
-					if(strcmp((char *)storage, "b") == 0)
-					{
-						goto real;
-					}
-				}while((char *)storage != "b");
-			}
-			else if(strcmp((char *)storage, "b") == 0)
-			{
-				goto real1;
-			}
- 	        else
- 	        {
- 	        	if(strcmp((char *)storage, "s") == 0)
- 	        	{
- 	        		memset(storage, 0, 255);
- 	        		goto scroll3;
- 	        	}
- 	        	else if(strcmp((char *)storage, "w") == 0)
- 	        	{
- 	        		memset(storage, 0, 255);
- 	        		goto scroll3;
- 	        	}
- 	        }
- 	        memset(storage, 0, 255);
- 	        down = 1;
- 	        up = 0;
- 	        while(complete != 1);
- 	    }
- 	   else if (strcmp((char *)storage, "b") == 0 )
- 	   {
- 		   goto real1;
- 	   }
-	  }while((char *)storage != "b");
-
-
-
- 	  while(complete != 1);
-      }
-  	 }
-
+///**
+//  ******************************************************************************
+//  * @file           : main.c
+//  * @brief          : Main program body
+//  ******************************************************************************
+//  * @attention
+//  *
+//  * Copyright (c) 2025 STMicroelectronics.
+//  * All rights reserved.
+//  *
+//  * This software is licensed under terms that can be found in the LICENSE file
+//  * in the root directory of this software component.
+//  * If no LICENSE file comes with this software, it is provided AS-IS.
+//  *
+//  ******************************************************************************
+//  */
+///* USER CODE END Header */
+//
+///* Includes ------------------------------------------------------------------*/
+//#include "main.h"
+//#include "st7735.h"
+//#include "fonts.h"
+//#include "stdio.h"
+//#include <stddef.h>
+//#include "menu.h"
+//#include <string.h>
+//#include <stdint.h>
+//#include <stdlib.h>
+//
+///* Private variables ---------------------------------------------------------*/
+//UART_HandleTypeDef hlpuart1;
+//DMA_HandleTypeDef hdma_lpuart_rx;
+//DMA_HandleTypeDef hdma_lpuart_tx;
+//
+//SPI_HandleTypeDef hspi3;
+//DMA_HandleTypeDef hdma_spi3_rx;
+//DMA_HandleTypeDef hdma_spi3_tx;
+//
+//PCD_HandleTypeDef hpcd_USB_OTG_FS;
+//
+///* USER CODE BEGIN PV */
+//extern SPI_HandleTypeDef ST7735_SPI_PORT;
+//
+//uint8_t DMA_Buff[255] = {0};
+//uint8_t main_Buff[255] = {0};
+//int rx_done = 0;
+//int tx_done = 0;
+//int game_done = 0;
+//
+//#ifndef NULL
+//#define NULL ((void*)0)
+//#endif
+//
+//typedef enum {
+//    MENU_MAIN,
+//    MENU_SHAPES,
+//    MENU_LIST,
+//    MENU_SHAPE_RECT,
+//    MENU_SHAPE_TRIANGLE,
+//    MENU_EXIT
+//} MenuState;
+//
+//static MenuState currentMenu = MENU_MAIN;
+///* USER CODE END PV */
+//
+///* Private function prototypes -----------------------------------------------*/
+//void SystemClock_Config(void);
+//static void MX_GPIO_Init(void);
+//static void MX_DMA_Init(void);
+//static void MX_LPUART1_UART_Init(void);
+//static void MX_USB_OTG_FS_PCD_Init(void);
+//static void MX_SPI3_Init(void);
+//
+///* USER CODE BEGIN 0 */
+//
+//void drawMainMenu(void) {
+//    ST7735_FillScreenFast(ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 10, "Shapes (E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//    ST7735_WriteStringDMA(10, 28, "List (S)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//}
+//
+//void drawShapesMenu(void) {
+//    ST7735_FillScreenFast(ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//    ST7735_WriteStringDMA(10, 28, "Triang(S)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 46, "Back(B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//}
+//
+//void drawList(void) {
+//    ST7735_FillScreenFast(ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 10, "-> Apple", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 28, "-> Orange", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 46, "-> Cherry", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 64, "-> Mango", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//    ST7735_WriteStringDMA(10, 82, "Back (B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//}
+//
+//void drawRectangle(void) {
+//    ST7735_FillScreenFast(ST7735_BLACK);
+//    ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
+//    ST7735_WriteStringDMA(10, 130, "Back (B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//}
+//
+//void drawTriangle(void) {
+//    ST7735_FillScreenFast(ST7735_BLACK);
+//    ST7735_DrawTriangle(0, 100, 64, 40, 128, 100, ST7735_GREEN);
+//    ST7735_WriteStringDMA(10, 130, "Back (B)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//}
+//
+//void menuLoop(void) {
+//    uint8_t input[2] = {0};
+//
+//    while (1) {
+//        switch (currentMenu) {
+//            case MENU_MAIN:
+//                drawMainMenu();
+//                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+//                if (input[0] == 'e' || input[0] == 'E') {
+//                    currentMenu = MENU_SHAPES;
+//                } else if (input[0] == 's' || input[0] == 'S') {
+//                    currentMenu = MENU_LIST;
+//                }
+//                break;
+//
+//            case MENU_LIST:
+//                drawList();
+//                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+//                if (input[0] == 'b' || input[0] == 'B') {
+//                    currentMenu = MENU_MAIN;
+//                }
+//                break;
+//
+//            case MENU_SHAPES:
+//                drawShapesMenu();
+//                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+//                if (input[0] == 'e' || input[0] == 'E') {
+//                    currentMenu = MENU_SHAPE_RECT;
+//                } else if (input[0] == 's' || input[0] == 'S') {
+//                    currentMenu = MENU_SHAPE_TRIANGLE;
+//                } else if (input[0] == 'b' || input[0] == 'B') {
+//                    currentMenu = MENU_MAIN;
+//                }
+//                break;
+//
+//            case MENU_SHAPE_RECT:
+//                drawRectangle();
+//                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+//                if (input[0] == 'b' || input[0] == 'B') {
+//                    currentMenu = MENU_SHAPES;
+//                }
+//                break;
+//
+//            case MENU_SHAPE_TRIANGLE:
+//                drawTriangle();
+//                HAL_UART_Receive(&hlpuart1, input, 1, HAL_MAX_DELAY);
+//                if (input[0] == 'b' || input[0] == 'B') {
+//                    currentMenu = MENU_SHAPES;
+//                }
+//                break;
+//
+//            default:
+//                currentMenu = MENU_MAIN;
+//                break;
+//        }
+//    }
+//}
+//
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+//    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+//    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
+//    memset(main_Buff, 0, sizeof(main_Buff));
+//    memcpy(main_Buff, DMA_Buff, Size);
+//    rx_done = 1;
+//}
+//
+//void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+//    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET);
+//    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
+//    tx_done = 1;
+//}
+//
+///* USER CODE END 0 */
+//
+///**
+//  * @brief  The application entry point.
+//  * @retval int
+//  */
+//int main(void) {
+//  /* MCU Configuration--------------------------------------------------------*/
+//
+//  HAL_Init();
+//
+//  SystemClock_Config();
+//
+//  MX_GPIO_Init();
+//  MX_DMA_Init();
+//  MX_LPUART1_UART_Init();
+//  MX_USB_OTG_FS_PCD_Init();
+//  MX_SPI3_Init();
+//
+//  ST7735_Init();
+//
+//  while (1) {
+//    menuLoop();
+//  }
+//}
+//    /* USER CODE END WHILE */
+//
+//    /* USER CODE BEGIN 3 */
+//	  ST7735_Backlight_On();
+//	  real1:
+//	  ST7735_FillScreenFast(ST7735_BLACK);
+//
+//	  /* Display "Test" */
+//
+//
+//	  ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//	  ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//
+////	  HAL_Delay(5000);
+////	  HAL_UARTEx_ReceiveToIdle_DMA(&hlpuart1, storage, sizeof(storage));
+//	  HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+////	  while(rx_done != 1)
+////	  {
+////		  HAL_Delay(2000);
+////	  }
+////	  rx_done = 0;
+//	  	  while(1)
+//	  	  {
+//	  		 if(strcmp((char*)storage,"e") == 0)
+//			 {
+//	  			  goto stop;
+//			 }
+//	  		 else if(strcmp((char*)storage,"s") == 0)
+//	  		 {
+//	  			 goto scroll2;
+//	  		 }
+//	  		 else
+//	  		 {
+//	  			 goto real1;
+//	  		 }
+//	  	  }
+//
+//	  	 if(strcmp((char *)storage, "e") == 0)
+//	  	 {
+//	  		 stop:
+//		  	  goto real;
+//		  	  memset(storage, 0, 255);
+//	  	 }
+//
+//	  	if (strcmp((char *)storage, "s") == 0)
+//	    {
+//			scroll2:
+//	        ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//	        ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//	        down = 0;
+//	        up = 1;
+//	        memset(storage, 0, 255);
+//	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//	        if(strcmp((char *)storage, "e") == 0)
+//	        {
+//	        	ST7735_FillScreenFast(ST7735_BLACK);
+//		        ST7735_WriteStringDMA(10, 10, "-> Apple", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//		        ST7735_WriteStringDMA(10, 28, "-> Orange", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//		        ST7735_WriteStringDMA(10, 46, "-> Cherry", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//		        ST7735_WriteStringDMA(10, 64, "-> Mango", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//				do{
+//					memset(storage, 0, 255);
+//					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//					if(strcmp((char *)storage, "b") == 0)
+//					{
+//						goto real1;
+//					}
+//				}while((char *)storage != "b");
+//	        }
+//	        else
+//	        {
+//	        	if(strcmp((char *)storage, "w") == 0)
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto scroll;
+//	        	}
+//	        	else if(strcmp((char *)storage, "s") == 0)
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto scroll1;
+//	        	}
+//	        	else
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto real1;
+//	        	}
+//	        }
+//	        while(complete != 1);
+//	    }
+//
+//	    if (strcmp((char *)storage, "w") == 0)
+//	    {
+//	    	scroll:
+//	    	scroll1:
+//	        ST7735_WriteStringDMA(10, 10, "Shapes(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//	        ST7735_WriteStringDMA(10, 28, "List(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//	        memset(storage, 0, 255);
+//	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//	        if(strcmp((char *)storage, "e") == 0)
+//	        {
+//	        	goto real;
+//	        }
+//	        else
+//	        {
+//	        	if(strcmp((char *)storage, "s") == 0)
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto scroll2;
+//	        	}
+//	        	else if(strcmp((char *)storage, "w") == 0)
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto scroll2;
+//	        	}
+//	        	else
+//	        	{
+//	        		memset(storage, 0, 255);
+//	        		goto real1;
+//	        	}
+//	        }
+//	        memset(storage, 0, 255);
+//	        down = 1;
+//	        up = 0;
+//	        while(complete != 1);
+//	    }
+//	  while(complete != 1);
+//     }
+//
+//  if(strcmp((char *)storage, "e") == 0)
+//  	 {
+//	  real:
+//	  do{
+//			memset(storage, 0, 255);
+//			ST7735_FillScreenFast(ST7735_BLACK);
+//			ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//			ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//			HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//
+//			if(strcmp((char *)storage, "e") == 0)
+//			{
+//				ST7735_FillScreenFast(ST7735_BLACK);
+//				ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
+//				ST7735_DrawLine(0, 30, 127, 30, ST7735_GREEN);
+//				ST7735_DrawLine(0, 130, 127, 130, ST7735_GREEN);
+//				ST7735_DrawLine(0, 30, 0, 130, ST7735_GREEN);
+//				ST7735_DrawLine(127, 30, 127, 130, ST7735_GREEN);
+//				do{
+//					memset(storage, 0, 255);
+//					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//					if(strcmp((char *)storage, "b") == 0)
+//					{
+//						goto real;
+//					}
+//				}while((char *)storage != "b");
+//			}
+// 	  	    if (strcmp((char *)storage, "s") == 0)
+// 	    	{
+//
+//				scroll3:
+//				ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+//				ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//				down = 0;
+//				up = 1;
+//				memset(storage, 0, 255);
+//				HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//
+//
+//				if(strcmp((char *)storage, "e") == 0)
+//				{
+//					ST7735_FillScreenFast(ST7735_BLACK);
+//					ST7735_DrawTriangle(0, 100, 64, 40, 128, 100, ST7735_GREEN);
+//					do{
+//						memset(storage, 0, 255);
+//						HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//						if(strcmp((char *)storage, "b") == 0)
+//						{
+//							goto real;
+//						}
+//					}while((char *)storage != "b");
+//				}
+//				else if(strcmp((char *)storage, "b") == 0)
+//				{
+//					goto real1;
+//				}
+//			else
+// 	        {
+// 	        	if(strcmp((char *)storage, "w") == 0)
+// 	        	{
+// 	        		memset(storage, 0, 255);
+// 	        		goto scroll4;
+// 	        	}
+// 	        	else if(strcmp((char *)storage, "s") == 0)
+// 	        	{
+// 	        		memset(storage, 0, 255);
+// 	        		goto scroll5;
+// 	        	}
+//
+// 	        }
+// 	        while(complete != 1);
+// 	    }
+//
+// 	    else if (strcmp((char *)storage, "w") == 0 )
+// 	    {
+// 	    	scroll4:
+// 	    	scroll5:
+//			ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
+//			ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+// 	        memset(storage, 0, 255);
+// 	        HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//			if(strcmp((char *)storage, "e") == 0)
+//			{
+//				ST7735_FillScreenFast(ST7735_BLACK);
+//				ST7735_FillRectangleFast(10, 40, 108, 80, ST7735_GREEN);
+//				ST7735_DrawLine(0, 30, 127, 30, ST7735_GREEN);
+//				ST7735_DrawLine(0, 130, 127, 130, ST7735_GREEN);
+//				ST7735_DrawLine(0, 30, 0, 130, ST7735_GREEN);
+//				ST7735_DrawLine(127, 30, 127, 130, ST7735_GREEN);
+//				do{
+//					memset(storage, 0, 255);
+//					HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
+//					if(strcmp((char *)storage, "b") == 0)
+//					{
+//						goto real;
+//					}
+//				}while((char *)storage != "b");
+//			}
+//			else if(strcmp((char *)storage, "b") == 0)
+//			{
+//				goto real1;
+//			}
+// 	        else
+// 	        {
+// 	        	if(strcmp((char *)storage, "s") == 0)
+// 	        	{
+// 	        		memset(storage, 0, 255);
+// 	        		goto scroll3;
+// 	        	}
+// 	        	else if(strcmp((char *)storage, "w") == 0)
+// 	        	{
+// 	        		memset(storage, 0, 255);
+// 	        		goto scroll3;
+// 	        	}
+// 	        }
+// 	        memset(storage, 0, 255);
+// 	        down = 1;
+// 	        up = 0;
+// 	        while(complete != 1);
+// 	    }
+// 	   else if (strcmp((char *)storage, "b") == 0 )
+// 	   {
+// 		   goto real1;
+// 	   }
+//	  }while((char *)storage != "b");
+//
+//
+//
+// 	  while(complete != 1);
+//      }
+//  	 }
+//
 
   /* USER CODE END 3 */
-//}
+
 
 /**
   * @brief System Clock Configuration

@@ -3,7 +3,7 @@
 #define __FONTS_H__
 
 #include <stdint.h>
-
+#include <stddef.h>
 typedef struct {
     const uint8_t width;
     uint8_t height;

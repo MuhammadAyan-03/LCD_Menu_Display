@@ -170,13 +170,28 @@ int main(void)
 //		  HAL_Delay(2000);
 //	  }
 //	  rx_done = 0;
+	  	  while(1)
+	  	  {
+	  		 if(strcmp((char*)storage,"e") == 0)
+			 {
+	  			  goto stop;
+			 }
+	  		 else if(strcmp((char*)storage,"s") == 0)
+	  		 {
+	  			 goto scroll2;
+	  		 }
+	  		 else
+	  		 {
+	  			 goto real1;
+	  		 }
+	  	  }
 
-
-	  if(strcmp((char *)storage, "e") == 0)
-	  {
-		  goto real;
-		  memset(storage, 0, 255);
-	  }
+	  	 if(strcmp((char *)storage, "e") == 0)
+	  	 {
+	  		 stop:
+		  	  goto real;
+		  	  memset(storage, 0, 255);
+	  	 }
 
 	  	if (strcmp((char *)storage, "s") == 0)
 	    {
@@ -215,6 +230,11 @@ int main(void)
 	        		memset(storage, 0, 255);
 	        		goto scroll1;
 	        	}
+	        	else
+	        	{
+	        		memset(storage, 0, 255);
+	        		goto real1;
+	        	}
 	        }
 	        while(complete != 1);
 	    }
@@ -243,6 +263,11 @@ int main(void)
 	        		memset(storage, 0, 255);
 	        		goto scroll2;
 	        	}
+	        	else
+	        	{
+	        		memset(storage, 0, 255);
+	        		goto real1;
+	        	}
 	        }
 	        memset(storage, 0, 255);
 	        down = 1;
@@ -257,7 +282,7 @@ int main(void)
 	  real:
 	  do{
 			memset(storage, 0, 255);
-			ST7735_FillScreen(ST7735_BLACK);
+			ST7735_FillScreenFast(ST7735_BLACK);
 			ST7735_WriteStringDMA(10, 10, "Rectang(E)", Font_11x18, ST7735_WHITE, ST7735_YELLOW);
 			ST7735_WriteStringDMA(10, 28, "Triang(E)", Font_11x18, ST7735_WHITE, ST7735_BLACK);
 			HAL_UART_Receive(&hlpuart1, storage, 1, HAL_MAX_DELAY);
@@ -506,7 +531,7 @@ static void MX_SPI3_Init(void)
   hspi3->Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3->Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3->Init.NSS = SPI_NSS_SOFT;
-  hspi3->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi3->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi3->Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3->Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
